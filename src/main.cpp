@@ -1,3 +1,5 @@
+// Entry point. Owns the app state, input handling, and the per-frame update loop.
+
 #include "raylib.h"
 #include "grid.h"
 #include "renderer.h"
@@ -7,6 +9,10 @@
 #include <cstdio>
 #include <iterator>
 #include <memory>
+
+#if defined(PLATFORM_WEB)
+#include <emscripten/emscripten.h>
+#endif
 
 struct Endpoint {
     int x = 0;
@@ -33,109 +39,127 @@ constexpr MarkerColor kGold   = { 255, 215, 0, 255 };
 constexpr MarkerColor kRed    = { 230, 80, 80, 255 };
 constexpr MarkerColor kMuted  = { 160, 160, 170, 255 };
 
-int main() {
-    const int screenWidth = 800;
-    const int screenHeight = 600;
+constexpr int kScreenWidth  = 800;
+constexpr int kScreenHeight = 600;
 
-    Grid grid(40, 30);
+// Everything the frame callback touches. Emscripten drives frame() from the
+// browser event loop, so this cannot live in main()'s locals.
+struct AppState {
+    Grid grid{ 40, 30 };
     GridView view{ 20, 20, 18 };
-
     Endpoint start;
     Endpoint goal;
-
-    InitWindow(screenWidth, screenHeight, "Pathfind");
-    SetTargetFPS(60);
-    initRenderer();
-
     bool painting = false;
     Cell paintValue = Cell::Wall;
-
     std::unique_ptr<AStarSearch> search;
-    int speedIdx     = 1;   // default: slow
+    int speedIdx = 1;   // default: slow
     int frameCounter = 0;
+};
 
-    while (!WindowShouldClose()) {
-        const CellHit hover = screenToCell(view, grid, GetMouseX(), GetMouseY());
-        const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+static void frame(void* arg) {
+    AppState& app = *static_cast<AppState*>(arg);
+    Grid& grid = app.grid;
+    const GridView& view = app.view;
 
-        if (hover.inside && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-            grid.set(hover.x, hover.y, Cell::Floor);
-            Endpoint& target = shift ? goal : start;
-            target = { hover.x, hover.y, true };
-        }
+    const CellHit hover = screenToCell(view, grid, GetMouseX(), GetMouseY());
+    const bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
 
-        if (hover.inside && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            painting = true;
-            paintValue = grid.at(hover.x, hover.y) == Cell::Wall ? Cell::Floor : Cell::Wall;
-            grid.set(hover.x, hover.y, paintValue);
-        }
-        if (painting && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && hover.inside) {
-            grid.set(hover.x, hover.y, paintValue);
-        }
-        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-            painting = false;
-        }
+    if (hover.inside && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+        grid.set(hover.x, hover.y, Cell::Floor);
+        Endpoint& target = shift ? app.goal : app.start;
+        target = { hover.x, hover.y, true };
+    }
 
-        if (IsKeyPressed(KEY_SPACE) && start.set && goal.set) {
-            search       = std::make_unique<AStarSearch>(grid, start.x, start.y, goal.x, goal.y);
-            frameCounter = 0;
-        }
-        if (IsKeyPressed(KEY_ENTER) && search) {
-            search->runToEnd();
-        }
-        if (IsKeyPressed(KEY_C)) {
-            search.reset();
-        }
-        if (IsKeyPressed(KEY_UP)) {
-            speedIdx = std::min((int)std::size(kSpeeds) - 1, speedIdx + 1);
-        }
-        if (IsKeyPressed(KEY_DOWN)) {
-            speedIdx = std::max(0, speedIdx - 1);
-        }
+    if (hover.inside && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        app.painting = true;
+        app.paintValue = grid.at(hover.x, hover.y) == Cell::Wall ? Cell::Floor : Cell::Wall;
+        grid.set(hover.x, hover.y, app.paintValue);
+    }
+    if (app.painting && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && hover.inside) {
+        grid.set(hover.x, hover.y, app.paintValue);
+    }
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+        app.painting = false;
+    }
 
-        if (search && search->status() == SearchStatus::Running) {
-            const Speed& sp = kSpeeds[speedIdx];
-            if (++frameCounter >= sp.framesPerStep) {
-                frameCounter = 0;
-                for (int i = 0; i < sp.stepsPerFrame && search->status() == SearchStatus::Running; ++i) {
-                    search->step();
-                }
+    if (IsKeyPressed(KEY_SPACE) && app.start.set && app.goal.set) {
+        app.search = std::make_unique<AStarSearch>(grid, app.start.x, app.start.y,
+                                                   app.goal.x, app.goal.y);
+        app.frameCounter = 0;
+    }
+    if (IsKeyPressed(KEY_ENTER) && app.search) {
+        app.search->runToEnd();
+    }
+    if (IsKeyPressed(KEY_C)) {
+        app.search.reset();
+    }
+    if (IsKeyPressed(KEY_UP)) {
+        app.speedIdx = std::min((int)std::size(kSpeeds) - 1, app.speedIdx + 1);
+    }
+    if (IsKeyPressed(KEY_DOWN)) {
+        app.speedIdx = std::max(0, app.speedIdx - 1);
+    }
+
+    if (app.search && app.search->status() == SearchStatus::Running) {
+        const Speed& sp = kSpeeds[app.speedIdx];
+        if (++app.frameCounter >= sp.framesPerStep) {
+            app.frameCounter = 0;
+            for (int i = 0; i < sp.stepsPerFrame && app.search->status() == SearchStatus::Running; ++i) {
+                app.search->step();
             }
         }
-
-        BeginDrawing();
-        ClearBackground(BLACK);
-        drawGrid(grid, view);
-        if (search) drawSearchState(grid, *search, view);
-        if (search && search->status() == SearchStatus::Found) {
-            drawPath(view, search->path());
-        }
-        if (start.set) drawCellMarker(view, start.x, start.y, { 80, 220, 120, 255 });
-        if (goal.set)  drawCellMarker(view, goal.x,  goal.y,  { 230, 80, 80, 255 });
-        if (hover.inside) drawCellHighlight(view, hover.x, hover.y);
-
-        const int textBaseY = screenHeight - 50;
-        drawUiText("L-drag walls   R-click start   Shift+R-click goal   Space run   Enter skip   Up/Down speed   C clear",
-                   20, textBaseY + 28, 13, kMuted);
-
-        char buf[160];
-        std::snprintf(buf, sizeof(buf), "Speed: %s", kSpeeds[speedIdx].label);
-        drawUiText(buf, 20, 20, 16, kWhite);
-
-        if (search) {
-            const char* statusText = "Running";
-            MarkerColor statusColor = kWhite;
-            if (search->status() == SearchStatus::Found)  { statusText = "Found";   statusColor = kGold; }
-            if (search->status() == SearchStatus::NoPath) { statusText = "No path"; statusColor = kRed;  }
-
-            std::snprintf(buf, sizeof(buf), "A*: %s   expanded %d   path %d cells",
-                          statusText,
-                          search->nodesExpanded(),
-                          search->status() == SearchStatus::Found ? (int)search->path().size() : 0);
-            drawUiText(buf, 20, textBaseY, 16, statusColor);
-        }
-        EndDrawing();
     }
+
+    BeginDrawing();
+    ClearBackground(BLACK);
+    drawGrid(grid, view);
+    if (app.search) drawSearchState(grid, *app.search, view);
+    if (app.search && app.search->status() == SearchStatus::Found) {
+        drawPath(view, app.search->path());
+    }
+    if (app.start.set) drawCellMarker(view, app.start.x, app.start.y, { 80, 220, 120, 255 });
+    if (app.goal.set)  drawCellMarker(view, app.goal.x,  app.goal.y,  { 230, 80, 80, 255 });
+    if (hover.inside) drawCellHighlight(view, hover.x, hover.y);
+
+    const int textBaseY = kScreenHeight - 50;
+    drawUiText("L-drag walls   R-click start   Shift+R-click goal   Space run   Enter skip   Up/Down speed   C clear",
+               20, textBaseY + 28, 13, kMuted);
+
+    char buf[160];
+    std::snprintf(buf, sizeof(buf), "Speed: %s", kSpeeds[app.speedIdx].label);
+    drawUiText(buf, 20, 20, 16, kWhite);
+
+    if (app.search) {
+        const char* statusText = "Running";
+        MarkerColor statusColor = kWhite;
+        if (app.search->status() == SearchStatus::Found)  { statusText = "Found";   statusColor = kGold; }
+        if (app.search->status() == SearchStatus::NoPath) { statusText = "No path"; statusColor = kRed;  }
+
+        std::snprintf(buf, sizeof(buf), "A*: %s   expanded %d   path %d cells",
+                      statusText,
+                      app.search->nodesExpanded(),
+                      app.search->status() == SearchStatus::Found ? (int)app.search->path().size() : 0);
+        drawUiText(buf, 20, textBaseY, 16, statusColor);
+    }
+    EndDrawing();
+}
+
+int main() {
+    InitWindow(kScreenWidth, kScreenHeight, "Pathfind");
+    initRenderer();
+
+    // Static so it outlives main()'s frame on web, where set_main_loop unwinds the stack.
+    static AppState app;
+
+#if defined(PLATFORM_WEB)
+    // The browser owns the loop. 0 fps means match requestAnimationFrame.
+    emscripten_set_main_loop_arg(frame, &app, 0, 1);
+#else
+    SetTargetFPS(60);
+    while (!WindowShouldClose()) {
+        frame(&app);
+    }
+#endif
 
     shutdownRenderer();
     CloseWindow();

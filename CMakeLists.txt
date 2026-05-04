@@ -31,3 +31,16 @@ target_link_libraries(pathfind PRIVATE raylib)
 if(WIN32)
     target_link_libraries(pathfind PRIVATE winmm)
 endif()
+
+# Web build: emcmake cmake -S . -B build-web -DPLATFORM=Web -DCMAKE_BUILD_TYPE=Release
+# The PLATFORM var is consumed by raylib's CMake, EMSCRIPTEN is set by the emsdk toolchain.
+if(EMSCRIPTEN)
+    target_compile_definitions(pathfind PRIVATE PLATFORM_WEB)
+    set_target_properties(pathfind PROPERTIES SUFFIX ".html")
+    target_link_options(pathfind PRIVATE
+        -sUSE_GLFW=3
+        -sALLOW_MEMORY_GROWTH=1
+        --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html)
+    # Relink when the shell changes, CMake does not track --shell-file itself.
+    set_target_properties(pathfind PROPERTIES LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html)
+endif()

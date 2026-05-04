@@ -18,7 +18,10 @@ set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(raylib)
 
-add_executable(pathfind src/main.cpp)
+add_executable(pathfind
+    src/main.cpp
+    src/grid.cpp
+)
 target_link_libraries(pathfind PRIVATE raylib)
 
 if(WIN32)

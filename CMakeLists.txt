@@ -7,6 +7,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
+
 FetchContent_Declare(
     raylib
     GIT_REPOSITORY https://github.com/raysan5/raylib.git
@@ -21,6 +23,7 @@ FetchContent_MakeAvailable(raylib)
 add_executable(pathfind
     src/main.cpp
     src/grid.cpp
+    src/renderer.cpp
 )
 target_link_libraries(pathfind PRIVATE raylib)
 

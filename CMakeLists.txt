@@ -24,6 +24,7 @@ add_executable(pathfind
     src/main.cpp
     src/grid.cpp
     src/renderer.cpp
+    src/astar.cpp
 )
 target_link_libraries(pathfind PRIVATE raylib)
 

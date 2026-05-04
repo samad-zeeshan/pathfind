@@ -1,8 +1,9 @@
+// Renderer implementation. Immediate-mode drawing on raylib, no state beyond the font.
+
 #include "renderer.h"
 
 #include "raylib.h"
 #include "grid.h"
-#include "astar.h"
 
 #include <algorithm>
 
@@ -79,28 +80,28 @@ void drawCellHighlight(const GridView& view, int cellX, int cellY) {
     DrawRectangle(view.originX + cellX * s, view.originY + cellY * s, s, s, kHighlightColor);
 }
 
-void drawSearchState(const Grid& grid, const AStarSearch& search, const GridView& view) {
+void drawSearchState(const Grid& grid, const Pathfinder& search, const GridView& view) {
     const int s = view.cellSize;
     for (int y = 0; y < grid.height(); ++y) {
         for (int x = 0; x < grid.width(); ++x) {
             const int px = view.originX + x * s;
             const int py = view.originY + y * s;
-            if (search.isClosed(x, y)) {
+            if (search.isClosed({ x, y })) {
                 DrawRectangle(px, py, s, s, kClosedColor);
-            } else if (search.isOpen(x, y)) {
+            } else if (search.isOpen({ x, y })) {
                 DrawRectangle(px, py, s, s, kOpenColor);
             }
         }
     }
 }
 
-void drawPath(const GridView& view, const std::vector<std::pair<int, int>>& path) {
+void drawPath(const GridView& view, const std::vector<Point>& path) {
     const int s = view.cellSize;
     const int inset = std::max(2, s / 5);
     const int side  = s - 2 * inset;
-    for (const auto& [x, y] : path) {
-        DrawRectangle(view.originX + x * s + inset,
-                      view.originY + y * s + inset,
+    for (const auto& p : path) {
+        DrawRectangle(view.originX + p.x * s + inset,
+                      view.originY + p.y * s + inset,
                       side, side, kPathColor);
     }
 }

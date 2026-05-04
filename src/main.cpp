@@ -3,6 +3,7 @@
 #include "raylib.h"
 #include "grid.h"
 #include "renderer.h"
+#include "pathfinder.h"
 #include "astar.h"
 
 #include <algorithm>
@@ -51,7 +52,7 @@ struct AppState {
     Endpoint goal;
     bool painting = false;
     Cell paintValue = Cell::Wall;
-    std::unique_ptr<AStarSearch> search;
+    std::unique_ptr<Pathfinder> search;
     int speedIdx = 1;   // default: slow
     int frameCounter = 0;
 };
@@ -83,8 +84,8 @@ static void frame(void* arg) {
     }
 
     if (IsKeyPressed(KEY_SPACE) && app.start.set && app.goal.set) {
-        app.search = std::make_unique<AStarSearch>(grid, app.start.x, app.start.y,
-                                                   app.goal.x, app.goal.y);
+        app.search = std::make_unique<AStarSearch>();
+        app.search->init(grid, { app.start.x, app.start.y }, { app.goal.x, app.goal.y });
         app.frameCounter = 0;
     }
     if (IsKeyPressed(KEY_ENTER) && app.search) {
@@ -135,10 +136,9 @@ static void frame(void* arg) {
         if (app.search->status() == SearchStatus::Found)  { statusText = "Found";   statusColor = kGold; }
         if (app.search->status() == SearchStatus::NoPath) { statusText = "No path"; statusColor = kRed;  }
 
-        std::snprintf(buf, sizeof(buf), "A*: %s   expanded %d   path %d cells",
-                      statusText,
-                      app.search->nodesExpanded(),
-                      app.search->status() == SearchStatus::Found ? (int)app.search->path().size() : 0);
+        const SearchStats st = app.search->stats();
+        std::snprintf(buf, sizeof(buf), "%s: %s   expanded %d   path %d cells",
+                      app.search->name(), statusText, st.nodesExpanded, st.pathLength);
         drawUiText(buf, 20, textBaseY, 16, statusColor);
     }
     EndDrawing();

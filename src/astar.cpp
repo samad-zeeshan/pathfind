@@ -1,3 +1,6 @@
+// A* implementation. Integer costs, 1000 straight and 1414 diagonal, so optimal
+// algorithms can be compared for exact cost equality with no float drift.
+
 #include "astar.h"
 
 #include "grid.h"
@@ -32,28 +35,32 @@ bool AStarSearch::OpenCmp::operator()(const OpenNode& a, const OpenNode& b) cons
     return a.g < b.g;                   // tie-break: larger g first
 }
 
-AStarSearch::AStarSearch(const Grid& grid, int sx, int sy, int gx, int gy)
-    : grid_(grid),
-      W_(grid.width()),
-      H_(grid.height()),
-      gx_(gx),
-      gy_(gy),
-      goalIdx_(gy * grid.width() + gx),
-      status_(SearchStatus::Running),
-      g_(grid.width() * grid.height(), kInf),
-      parent_(grid.width() * grid.height(), -1),
-      closed_(grid.width() * grid.height(), 0),
-      inOpen_(grid.width() * grid.height(), 0)
-{
-    if (!grid.inBounds(sx, sy) || !grid.inBounds(gx, gy) ||
-        grid.at(sx, sy) == Cell::Wall || grid.at(gx, gy) == Cell::Wall) {
+void AStarSearch::init(const Grid& grid, Point start, Point goal) {
+    grid_ = &grid;
+    W_ = grid.width();
+    H_ = grid.height();
+    goal_ = goal;
+    goalIdx_ = goal.y * W_ + goal.x;
+    status_ = SearchStatus::Running;
+    nodesExpanded_ = 0;
+    openCount_ = 0;
+    g_.assign(W_ * H_, kInf);
+    parent_.assign(W_ * H_, -1);
+    closed_.assign(W_ * H_, 0);
+    inOpen_.assign(W_ * H_, 0);
+    open_ = {};
+    path_.clear();
+
+    if (!grid.inBounds(start.x, start.y) || !grid.inBounds(goal.x, goal.y) ||
+        grid.at(start.x, start.y) == Cell::Wall || grid.at(goal.x, goal.y) == Cell::Wall) {
         status_ = SearchStatus::NoPath;
         return;
     }
-    const int startIdx = sy * W_ + sx;
+    const int startIdx = start.y * W_ + start.x;
     g_[startIdx]      = 0;
     inOpen_[startIdx] = 1;
-    open_.push({ startIdx, octile(sx - gx, sy - gy), 0 });
+    openCount_        = 1;
+    open_.push({ startIdx, octile(start.x - goal.x, start.y - goal.y), 0 });
 }
 
 SearchStatus AStarSearch::step() {
@@ -62,14 +69,17 @@ SearchStatus AStarSearch::step() {
     while (!open_.empty()) {
         const OpenNode cur = open_.top();
         open_.pop();
+        // Lazy deletion. A cell can sit in the heap several times, only the
+        // entry matching its current g is live.
         if (closed_[cur.idx]) continue;
         if (cur.g != g_[cur.idx]) continue;
         closed_[cur.idx] = 1;
-        inOpen_[cur.idx] = 0;
+        if (inOpen_[cur.idx]) { inOpen_[cur.idx] = 0; --openCount_; }
         ++nodesExpanded_;
 
         if (cur.idx == goalIdx_) {
             status_ = SearchStatus::Found;
+            reconstructPath();
             return status_;
         }
 
@@ -78,11 +88,12 @@ SearchStatus AStarSearch::step() {
         for (int d = 0; d < 8; ++d) {
             const int nx = cx + DX[d];
             const int ny = cy + DY[d];
-            if (!grid_.inBounds(nx, ny)) continue;
-            if (grid_.at(nx, ny) == Cell::Wall) continue;
+            if (!grid_->inBounds(nx, ny)) continue;
+            if (grid_->at(nx, ny) == Cell::Wall) continue;
+            // No corner cutting, a diagonal needs both orthogonal cells free.
             if (DX[d] != 0 && DY[d] != 0) {
-                if (grid_.at(cx + DX[d], cy) == Cell::Wall) continue;
-                if (grid_.at(cx, cy + DY[d]) == Cell::Wall) continue;
+                if (grid_->at(cx + DX[d], cy) == Cell::Wall) continue;
+                if (grid_->at(cx, cy + DY[d]) == Cell::Wall) continue;
             }
             const int nIdx = ny * W_ + nx;
             if (closed_[nIdx]) continue;
@@ -91,8 +102,8 @@ SearchStatus AStarSearch::step() {
             if (newG < g_[nIdx]) {
                 g_[nIdx]      = newG;
                 parent_[nIdx] = cur.idx;
-                inOpen_[nIdx] = 1;
-                open_.push({ nIdx, newG + octile(nx - gx_, ny - gy_), newG });
+                if (!inOpen_[nIdx]) { inOpen_[nIdx] = 1; ++openCount_; }
+                open_.push({ nIdx, newG + octile(nx - goal_.x, ny - goal_.y), newG });
             }
         }
         return status_;  // one expansion per step()
@@ -102,35 +113,40 @@ SearchStatus AStarSearch::step() {
     return status_;
 }
 
-SearchStatus AStarSearch::runToEnd() {
-    while (status_ == SearchStatus::Running) step();
-    return status_;
+bool AStarSearch::isOpen(Point p) const {
+    if (!grid_ || p.x < 0 || p.y < 0 || p.x >= W_ || p.y >= H_) return false;
+    return inOpen_[p.y * W_ + p.x] != 0;
 }
 
-bool AStarSearch::isOpen(int x, int y) const {
-    return inOpen_[y * W_ + x] != 0;
+bool AStarSearch::isClosed(Point p) const {
+    if (!grid_ || p.x < 0 || p.y < 0 || p.x >= W_ || p.y >= H_) return false;
+    return closed_[p.y * W_ + p.x] != 0;
 }
 
-bool AStarSearch::isClosed(int x, int y) const {
-    return closed_[y * W_ + x] != 0;
+SearchStats AStarSearch::stats() const {
+    SearchStats s;
+    s.nodesExpanded = nodesExpanded_;
+    s.frontierSize  = openCount_;
+    s.pathLength    = (int)path_.size();
+    s.pathCost      = status_ == SearchStatus::Found ? g_[goalIdx_] : 0;
+    return s;
 }
 
-std::vector<std::pair<int, int>> AStarSearch::path() const {
-    std::vector<std::pair<int, int>> result;
-    if (status_ != SearchStatus::Found) return result;
+void AStarSearch::reconstructPath() {
+    path_.clear();
     for (int i = goalIdx_; i != -1; i = parent_[i]) {
-        result.push_back({ i % W_, i / W_ });
+        path_.push_back({ i % W_, i / W_ });
     }
-    std::reverse(result.begin(), result.end());
-    return result;
+    std::reverse(path_.begin(), path_.end());
 }
 
 AStarResult astar(const Grid& grid, int sx, int sy, int gx, int gy) {
-    AStarSearch s(grid, sx, sy, gx, gy);
+    AStarSearch s;
+    s.init(grid, { sx, sy }, { gx, gy });
     s.runToEnd();
     AStarResult r;
     r.found         = s.status() == SearchStatus::Found;
-    r.nodesExpanded = s.nodesExpanded();
+    r.nodesExpanded = s.stats().nodesExpanded;
     if (r.found) r.path = s.path();
     return r;
 }

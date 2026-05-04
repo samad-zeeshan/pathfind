@@ -1,48 +1,51 @@
+// A* search over the grid with an octile-distance heuristic.
+
 #pragma once
+
+#include "pathfinder.h"
 
 #include <cstdint>
 #include <queue>
-#include <utility>
 #include <vector>
 
 class Grid;
 
-enum class SearchStatus { Running, Found, NoPath };
-
-class AStarSearch {
+class AStarSearch : public Pathfinder {
 public:
-    AStarSearch(const Grid& grid, int sx, int sy, int gx, int gy);
+    void init(const Grid& grid, Point start, Point goal) override;
+    SearchStatus step() override;
+    SearchStatus status() const override { return status_; }
 
-    SearchStatus step();        // expand at most one node
-    SearchStatus runToEnd();    // step() until done
-    SearchStatus status() const { return status_; }
-    int nodesExpanded() const { return nodesExpanded_; }
-    int width() const { return W_; }
-    int height() const { return H_; }
+    bool isOpen(Point p) const override;
+    bool isClosed(Point p) const override;
+    const std::vector<Point>& path() const override { return path_; }
 
-    bool isOpen(int x, int y) const;
-    bool isClosed(int x, int y) const;
-    std::vector<std::pair<int, int>> path() const; // empty unless Found
+    SearchStats stats() const override;
+    const char* name() const override { return "A*"; }
 
     struct OpenNode { int idx; int f; int g; };
     struct OpenCmp  { bool operator()(const OpenNode& a, const OpenNode& b) const; };
 
 private:
-    const Grid& grid_;
-    int W_, H_;
-    int gx_, gy_;
-    int goalIdx_;
-    SearchStatus status_;
+    const Grid* grid_ = nullptr;
+    int W_ = 0, H_ = 0;
+    Point goal_{};
+    int goalIdx_ = -1;
+    SearchStatus status_ = SearchStatus::NoPath;
     int nodesExpanded_ = 0;
+    int openCount_ = 0;
     std::vector<int>     g_;
     std::vector<int>     parent_;
     std::vector<uint8_t> closed_;
     std::vector<uint8_t> inOpen_;
     std::priority_queue<OpenNode, std::vector<OpenNode>, OpenCmp> open_;
+    std::vector<Point>   path_;
+
+    void reconstructPath();
 };
 
 struct AStarResult {
-    std::vector<std::pair<int, int>> path;
+    std::vector<Point> path;
     int nodesExpanded = 0;
     bool found = false;
 };

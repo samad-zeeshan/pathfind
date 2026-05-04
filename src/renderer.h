@@ -1,11 +1,13 @@
+// Drawing helpers for the grid, search overlay, and UI text.
+
 #pragma once
 
+#include "pathfinder.h"
+
 #include <cstdint>
-#include <utility>
 #include <vector>
 
 class Grid;
-class AStarSearch;
 
 struct GridView {
     int originX;
@@ -29,8 +31,8 @@ void shutdownRenderer();
 void drawGrid(const Grid& grid, const GridView& view);
 void drawCellHighlight(const GridView& view, int cellX, int cellY);
 void drawCellMarker(const GridView& view, int cellX, int cellY, MarkerColor color);
-void drawPath(const GridView& view, const std::vector<std::pair<int, int>>& path);
-void drawSearchState(const Grid& grid, const AStarSearch& search, const GridView& view);
+void drawPath(const GridView& view, const std::vector<Point>& path);
+void drawSearchState(const Grid& grid, const Pathfinder& search, const GridView& view);
 
 void drawUiText(const char* text, int x, int y, int size, MarkerColor color);
 

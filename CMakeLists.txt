@@ -34,6 +34,29 @@ if(WIN32)
     target_link_libraries(pathfind PRIVATE winmm)
 endif()
 
+# Pure-logic test suite, no raylib. Meaningless in a wasm build.
+option(PATHFIND_BUILD_TESTS "Build the unit tests" ON)
+if(PATHFIND_BUILD_TESTS AND NOT EMSCRIPTEN)
+    FetchContent_Declare(
+        doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG        v2.4.12
+    )
+    FetchContent_MakeAvailable(doctest)
+
+    enable_testing()
+    add_executable(pathfind_tests
+        tests/test_pathfinding.cpp
+        src/grid.cpp
+        src/search_core.cpp
+        src/bfs.cpp
+        src/algorithms.cpp
+    )
+    target_include_directories(pathfind_tests PRIVATE src)
+    target_link_libraries(pathfind_tests PRIVATE doctest::doctest)
+    add_test(NAME pathfind_tests COMMAND pathfind_tests)
+endif()
+
 # Web build: emcmake cmake -S . -B build-web -DPLATFORM=Web -DCMAKE_BUILD_TYPE=Release
 # The PLATFORM var is consumed by raylib's CMake, EMSCRIPTEN is set by the emsdk toolchain.
 if(EMSCRIPTEN)

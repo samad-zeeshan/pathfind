@@ -20,14 +20,22 @@ set(BUILD_GAMES OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(raylib)
 
-add_executable(pathfind
-    src/main.cpp
+# Everything the searches need and nothing the renderer does, shared by the
+# app, the tests, and the benchmark.
+set(PATHFIND_CORE_SOURCES
     src/grid.cpp
-    src/renderer.cpp
-    src/controller.cpp
     src/search_core.cpp
     src/bfs.cpp
+    src/bidirectional.cpp
+    src/jps.cpp
     src/algorithms.cpp
+)
+
+add_executable(pathfind
+    src/main.cpp
+    src/renderer.cpp
+    src/controller.cpp
+    ${PATHFIND_CORE_SOURCES}
 )
 target_link_libraries(pathfind PRIVATE raylib)
 
@@ -37,13 +45,7 @@ endif()
 
 # Headless benchmark over the committed fixtures in maps/. No raylib.
 if(NOT EMSCRIPTEN)
-    add_executable(pathfind_bench
-        src/bench_main.cpp
-        src/grid.cpp
-        src/search_core.cpp
-        src/bfs.cpp
-        src/algorithms.cpp
-    )
+    add_executable(pathfind_bench src/bench_main.cpp ${PATHFIND_CORE_SOURCES})
 endif()
 
 # Pure-logic test suite, no raylib. Meaningless in a wasm build.
@@ -57,13 +59,7 @@ if(PATHFIND_BUILD_TESTS AND NOT EMSCRIPTEN)
     FetchContent_MakeAvailable(doctest)
 
     enable_testing()
-    add_executable(pathfind_tests
-        tests/test_pathfinding.cpp
-        src/grid.cpp
-        src/search_core.cpp
-        src/bfs.cpp
-        src/algorithms.cpp
-    )
+    add_executable(pathfind_tests tests/test_pathfinding.cpp ${PATHFIND_CORE_SOURCES})
     target_include_directories(pathfind_tests PRIVATE src)
     target_link_libraries(pathfind_tests PRIVATE doctest::doctest)
     add_test(NAME pathfind_tests COMMAND pathfind_tests)

@@ -68,7 +68,10 @@ protected:
     // Path cost is recomputed from the returned cells rather than read from g,
     // so it is honest even for algorithms whose g is not cost-optimal.
     void finishWithPath(std::vector<Point> cells);
-    void finishFromParents();
+
+    // Virtual because parents are not always adjacent, JPS chains jump points
+    // and has to fill in the cells between them.
+    virtual void finishFromParents();
 
     const Grid* grid_ = nullptr;
     int W_ = 0, H_ = 0;
@@ -101,6 +104,13 @@ protected:
     // Decides whether a neighbor discovered at cost newG enters the frontier.
     // Default is the Dijkstra/A* rule, requeue on any strict improvement.
     virtual bool tryRelax(int nIdx, int newG);
+
+    // Called once per expansion with the node just closed. The default visits
+    // the adjacent cells, JPS overrides it to jump to distant successors.
+    virtual void expandNode(int idx, int g);
+
+    // Relax toIdx at cost newG and push it, shared by every successor source.
+    void enqueue(int fromIdx, int toIdx, int newG);
 
     int heuristic(int x, int y) const {
         return octileDistance(x - goal_.x, y - goal_.y, cost_);

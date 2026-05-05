@@ -163,7 +163,7 @@ static void frame(void* arg) {
     drawPanel(app);
 
     const int helpY = kScreenHeight - 44;
-    drawUiText("L-drag walls   R-click start   Shift+R-click goal   1-4 algorithm",
+    drawUiText("L-drag walls   R-click start   Shift+R-click goal   1-6 algorithm",
                20, helpY, 13, kMuted);
     drawUiText("Space play/pause   S step   Enter finish   R reset   C clear   Up/Down speed",
                20, helpY + 20, 13, kMuted);

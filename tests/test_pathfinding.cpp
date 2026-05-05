@@ -7,9 +7,11 @@
 #include "algorithms.h"
 #include "astar.h"
 #include "bfs.h"
+#include "bidirectional.h"
 #include "dijkstra.h"
 #include "greedy.h"
 #include "grid.h"
+#include "jps.h"
 #include "random_grid.h"
 
 #include <cstdlib>
@@ -94,22 +96,33 @@ TEST_CASE("oracle: optimal algorithms agree on cost, greedy never beats them") {
         const TestMap m = mapForCase(seed);
 
         AStarSearch astar;
-        DijkstraSearch dijkstra;
-        GreedySearch greedy;
         astar.init(m.grid, m.start, m.goal);
-        dijkstra.init(m.grid, m.start, m.goal);
-        greedy.init(m.grid, m.start, m.goal);
         astar.runToEnd();
-        dijkstra.runToEnd();
-        greedy.runToEnd();
 
-        // Reachability is a property of the graph, not the algorithm.
-        CHECK(dijkstra.status() == astar.status());
+        // Every optimal algorithm must reproduce A*'s cost exactly. This is
+        // the strongest check in the suite, a wrong termination condition in
+        // Bi-A* or a bad pruning rule in JPS shows up here immediately.
+        DijkstraSearch dijkstra;
+        BidirAStarSearch bidir;
+        JpsSearch jps;
+        Pathfinder* optimal[] = { &dijkstra, &bidir, &jps };
+        for (Pathfinder* algo : optimal) {
+            CAPTURE(algo->name());
+            algo->init(m.grid, m.start, m.goal);
+            algo->runToEnd();
+            CHECK(algo->status() == astar.status());
+            if (astar.status() == SearchStatus::Found) {
+                CHECK(algo->stats().pathCost == astar.stats().pathCost);
+            }
+        }
+
+        GreedySearch greedy;
+        greedy.init(m.grid, m.start, m.goal);
+        greedy.runToEnd();
         CHECK(greedy.status() == astar.status());
 
         if (astar.status() != SearchStatus::Found) continue;
         ++foundCount;
-        CHECK(dijkstra.stats().pathCost == astar.stats().pathCost);
         CHECK(greedy.stats().pathCost >= astar.stats().pathCost);
     }
     // Guard against the generator silently producing only unreachable maps.

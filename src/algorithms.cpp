@@ -7,6 +7,8 @@
 #include "dijkstra.h"
 #include "greedy.h"
 #include "astar.h"
+#include "bidirectional.h"
+#include "jps.h"
 
 namespace {
 
@@ -25,6 +27,8 @@ constexpr Entry kAlgorithms[] = {
     { "Dijkstra", create<DijkstraSearch> },
     { "Greedy",   create<GreedySearch> },
     { "A*",       create<AStarSearch> },
+    { "Bi-A*",    create<BidirAStarSearch> },
+    { "JPS",      create<JpsSearch> },
 };
 
 }  // namespace

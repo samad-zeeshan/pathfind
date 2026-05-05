@@ -129,19 +129,26 @@ SearchStatus HeapSearch::step() {
             return status_;
         }
 
-        Neighbor nbr[8];
-        const int count = neighbors(cur.idx % W_, cur.idx / W_, nbr);
-        for (int i = 0; i < count; ++i) {
-            const int nIdx = index(nbr[i].x, nbr[i].y);
-            if (closed_[nIdx]) continue;
-            if (!tryRelax(nIdx, cur.g + nbr[i].cost)) continue;
-            parent_[nIdx] = cur.idx;
-            if (!inOpen_[nIdx]) { inOpen_[nIdx] = 1; ++openCount_; }
-            open_.push({ nIdx, priority(g_[nIdx], heuristic(nbr[i].x, nbr[i].y)), g_[nIdx] });
-        }
+        expandNode(cur.idx, cur.g);
         return status_;  // one expansion per step()
     }
 
     status_ = SearchStatus::NoPath;
     return status_;
+}
+
+void HeapSearch::expandNode(int idx, int g) {
+    Neighbor nbr[8];
+    const int count = neighbors(idx % W_, idx / W_, nbr);
+    for (int i = 0; i < count; ++i) {
+        enqueue(idx, index(nbr[i].x, nbr[i].y), g + nbr[i].cost);
+    }
+}
+
+void HeapSearch::enqueue(int fromIdx, int toIdx, int newG) {
+    if (closed_[toIdx]) return;
+    if (!tryRelax(toIdx, newG)) return;
+    parent_[toIdx] = fromIdx;
+    if (!inOpen_[toIdx]) { inOpen_[toIdx] = 1; ++openCount_; }
+    open_.push({ toIdx, priority(newG, heuristic(toIdx % W_, toIdx / W_)), newG });
 }

@@ -35,6 +35,17 @@ if(WIN32)
     target_link_libraries(pathfind PRIVATE winmm)
 endif()
 
+# Headless benchmark over the committed fixtures in maps/. No raylib.
+if(NOT EMSCRIPTEN)
+    add_executable(pathfind_bench
+        src/bench_main.cpp
+        src/grid.cpp
+        src/search_core.cpp
+        src/bfs.cpp
+        src/algorithms.cpp
+    )
+endif()
+
 # Pure-logic test suite, no raylib. Meaningless in a wasm build.
 option(PATHFIND_BUILD_TESTS "Build the unit tests" ON)
 if(PATHFIND_BUILD_TESTS AND NOT EMSCRIPTEN)

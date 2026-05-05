@@ -16,6 +16,16 @@ constexpr Color kHighlightColor = { 255, 220, 100, 90 };
 constexpr Color kPathColor      = { 255, 215, 0, 220 };
 constexpr Color kOpenColor      = { 90, 170, 255, 110 };
 constexpr Color kClosedColor    = { 110, 100, 200, 95 };
+constexpr Color kStartColor     = { 80, 220, 120, 255 };
+constexpr Color kGoalColor      = { 230, 80, 80, 255 };
+constexpr Color kLegendText     = { 200, 200, 210, 255 };
+
+void drawMarker(const GridView& view, int cellX, int cellY, Color color) {
+    const int s = view.cellSize;
+    const int cx = view.originX + cellX * s + s / 2;
+    const int cy = view.originY + cellY * s + s / 2;
+    DrawCircle(cx, cy, s * 0.4f, color);
+}
 
 Font  g_font     = {};
 bool  g_fontOwned = false;
@@ -106,12 +116,35 @@ void drawPath(const GridView& view, const std::vector<Point>& path) {
     }
 }
 
-void drawCellMarker(const GridView& view, int cellX, int cellY, MarkerColor color) {
-    const int s = view.cellSize;
-    const int cx = view.originX + cellX * s + s / 2;
-    const int cy = view.originY + cellY * s + s / 2;
-    const float r = s * 0.4f;
-    DrawCircle(cx, cy, r, Color{ color.r, color.g, color.b, color.a });
+void drawStartMarker(const GridView& view, int cellX, int cellY) {
+    drawMarker(view, cellX, cellY, kStartColor);
+}
+
+void drawGoalMarker(const GridView& view, int cellX, int cellY) {
+    drawMarker(view, cellX, cellY, kGoalColor);
+}
+
+void drawLegend(int x, int y) {
+    struct Item { Color color; const char* label; bool onFloor; };
+    // Translucent overlay colors are drawn on a floor backing so the swatch
+    // matches what they actually look like on the grid.
+    const Item items[] = {
+        { kWallColor,   "wall",     false },
+        { kOpenColor,   "frontier", true  },
+        { kClosedColor, "expanded", true  },
+        { kPathColor,   "path",     true  },
+        { kStartColor,  "start",    false },
+        { kGoalColor,   "goal",     false },
+    };
+    const int size = 14;
+    const int spacing = 22;
+    for (int i = 0; i < (int)(sizeof(items) / sizeof(items[0])); ++i) {
+        const int iy = y + i * spacing;
+        if (items[i].onFloor) DrawRectangle(x, iy, size, size, kFloorColor);
+        DrawRectangle(x, iy, size, size, items[i].color);
+        DrawTextEx(g_font, items[i].label, Vector2{ (float)(x + size + 8), (float)iy },
+                   13.0f, 1.0f, kLegendText);
+    }
 }
 
 CellHit screenToCell(const GridView& view, const Grid& grid, int screenX, int screenY) {

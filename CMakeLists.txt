@@ -24,6 +24,7 @@ add_executable(pathfind
     src/main.cpp
     src/grid.cpp
     src/renderer.cpp
+    src/controller.cpp
     src/search_core.cpp
     src/bfs.cpp
     src/algorithms.cpp

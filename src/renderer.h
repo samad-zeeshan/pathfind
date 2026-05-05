@@ -30,9 +30,11 @@ void shutdownRenderer();
 
 void drawGrid(const Grid& grid, const GridView& view);
 void drawCellHighlight(const GridView& view, int cellX, int cellY);
-void drawCellMarker(const GridView& view, int cellX, int cellY, MarkerColor color);
+void drawStartMarker(const GridView& view, int cellX, int cellY);
+void drawGoalMarker(const GridView& view, int cellX, int cellY);
 void drawPath(const GridView& view, const std::vector<Point>& path);
 void drawSearchState(const Grid& grid, const Pathfinder& search, const GridView& view);
+void drawLegend(int x, int y);
 
 void drawUiText(const char* text, int x, int y, int size, MarkerColor color);
 

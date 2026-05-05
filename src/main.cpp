@@ -4,7 +4,7 @@
 #include "grid.h"
 #include "renderer.h"
 #include "pathfinder.h"
-#include "astar.h"
+#include "algorithms.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -53,9 +53,16 @@ struct AppState {
     bool painting = false;
     Cell paintValue = Cell::Wall;
     std::unique_ptr<Pathfinder> search;
+    int algoIdx = 3;    // default: A*, the registry's narrative ends on it
     int speedIdx = 1;   // default: slow
     int frameCounter = 0;
 };
+
+static void startSearch(AppState& app) {
+    app.search = makeAlgorithm(app.algoIdx);
+    app.search->init(app.grid, { app.start.x, app.start.y }, { app.goal.x, app.goal.y });
+    app.frameCounter = 0;
+}
 
 static void frame(void* arg) {
     AppState& app = *static_cast<AppState*>(arg);
@@ -83,10 +90,17 @@ static void frame(void* arg) {
         app.painting = false;
     }
 
+    // Number keys select the algorithm. Switching restarts an active search so
+    // the two runs can be compared on the same map.
+    for (int i = 0; i < algorithmCount(); ++i) {
+        if (IsKeyPressed(KEY_ONE + i)) {
+            app.algoIdx = i;
+            if (app.search && app.start.set && app.goal.set) startSearch(app);
+        }
+    }
+
     if (IsKeyPressed(KEY_SPACE) && app.start.set && app.goal.set) {
-        app.search = std::make_unique<AStarSearch>();
-        app.search->init(grid, { app.start.x, app.start.y }, { app.goal.x, app.goal.y });
-        app.frameCounter = 0;
+        startSearch(app);
     }
     if (IsKeyPressed(KEY_ENTER) && app.search) {
         app.search->runToEnd();
@@ -123,11 +137,12 @@ static void frame(void* arg) {
     if (hover.inside) drawCellHighlight(view, hover.x, hover.y);
 
     const int textBaseY = kScreenHeight - 50;
-    drawUiText("L-drag walls   R-click start   Shift+R-click goal   Space run   Enter skip   Up/Down speed   C clear",
+    drawUiText("L-drag walls   R-click start   Shift+R-click goal   1-4 algorithm   Space run   Enter skip   Up/Down speed   C clear",
                20, textBaseY + 28, 13, kMuted);
 
     char buf[160];
-    std::snprintf(buf, sizeof(buf), "Speed: %s", kSpeeds[app.speedIdx].label);
+    std::snprintf(buf, sizeof(buf), "%s   speed: %s",
+                  algorithmName(app.algoIdx), kSpeeds[app.speedIdx].label);
     drawUiText(buf, 20, 20, 16, kWhite);
 
     if (app.search) {

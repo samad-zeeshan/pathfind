@@ -1,47 +1,17 @@
-// A* search over the grid with an octile-distance heuristic.
+// A*: best-first on g plus an admissible heuristic. Optimal like Dijkstra but
+// focused toward the goal.
 
 #pragma once
 
-#include "pathfinder.h"
+#include "search_core.h"
 
-#include <cstdint>
-#include <queue>
-#include <vector>
-
-class Grid;
-
-class AStarSearch : public Pathfinder {
+class AStarSearch : public HeapSearch {
 public:
-    void init(const Grid& grid, Point start, Point goal) override;
-    SearchStatus step() override;
-    SearchStatus status() const override { return status_; }
-
-    bool isOpen(Point p) const override;
-    bool isClosed(Point p) const override;
-    const std::vector<Point>& path() const override { return path_; }
-
-    SearchStats stats() const override;
+    explicit AStarSearch(CostModel cost = kOctileCosts) : HeapSearch(cost) {}
     const char* name() const override { return "A*"; }
 
-    struct OpenNode { int idx; int f; int g; };
-    struct OpenCmp  { bool operator()(const OpenNode& a, const OpenNode& b) const; };
-
-private:
-    const Grid* grid_ = nullptr;
-    int W_ = 0, H_ = 0;
-    Point goal_{};
-    int goalIdx_ = -1;
-    SearchStatus status_ = SearchStatus::NoPath;
-    int nodesExpanded_ = 0;
-    int openCount_ = 0;
-    std::vector<int>     g_;
-    std::vector<int>     parent_;
-    std::vector<uint8_t> closed_;
-    std::vector<uint8_t> inOpen_;
-    std::priority_queue<OpenNode, std::vector<OpenNode>, OpenCmp> open_;
-    std::vector<Point>   path_;
-
-    void reconstructPath();
+protected:
+    int priority(int g, int h) const override { return g + h; }
 };
 
 struct AStarResult {
@@ -50,4 +20,13 @@ struct AStarResult {
     bool found = false;
 };
 
-AStarResult astar(const Grid& grid, int sx, int sy, int gx, int gy);
+inline AStarResult astar(const Grid& grid, int sx, int sy, int gx, int gy) {
+    AStarSearch s;
+    s.init(grid, { sx, sy }, { gx, gy });
+    s.runToEnd();
+    AStarResult r;
+    r.found         = s.status() == SearchStatus::Found;
+    r.nodesExpanded = s.stats().nodesExpanded;
+    if (r.found) r.path = s.path();
+    return r;
+}

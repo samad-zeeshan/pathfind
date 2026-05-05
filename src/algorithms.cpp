@@ -3,6 +3,8 @@
 
 #include "algorithms.h"
 
+#include <cstring>
+
 #include "bfs.h"
 #include "dijkstra.h"
 #include "greedy.h"
@@ -39,6 +41,13 @@ int algorithmCount() {
 
 const char* algorithmName(int index) {
     return kAlgorithms[index].name;
+}
+
+int algorithmIndex(const char* name) {
+    for (int i = 0; i < algorithmCount(); ++i) {
+        if (std::strcmp(kAlgorithms[i].name, name) == 0) return i;
+    }
+    return -1;
 }
 
 std::unique_ptr<Pathfinder> makeAlgorithm(int index) {

@@ -2,6 +2,7 @@
 
 #include "raylib.h"
 #include "grid.h"
+#include "config.h"
 #include "renderer.h"
 #include "pathfinder.h"
 #include "algorithms.h"
@@ -25,21 +26,22 @@ constexpr MarkerColor kGold  = { 255, 215, 0, 255 };
 constexpr MarkerColor kRed   = { 230, 80, 80, 255 };
 constexpr MarkerColor kMuted = { 160, 160, 170, 255 };
 
-constexpr int kPanelWidth   = 250;
-constexpr int kScreenWidth  = 20 + 40 * 18 + 20 + kPanelWidth;   // grid plus side panel
-constexpr int kScreenHeight = 600;
-
 // Everything the frame callback touches. Emscripten drives frame() from the
 // browser event loop, so this cannot live in main()'s locals.
 struct AppState {
-    Grid grid{ 40, 30 };
-    GridView view{ 20, 20, 18 };
+    Config cfg;
+    Grid grid;
+    GridView view;
     Endpoint start;
     Endpoint goal;
     bool painting = false;
     Cell paintValue = Cell::Wall;
     SearchController controller;
-    int algoIdx = algorithmCount() - 1;   // default: A*, the registry's last word
+    // Pinned by name so appending algorithms to the registry never moves it.
+    int algoIdx = algorithmIndex("A*");
+
+    explicit AppState(const Config& c)
+        : cfg(c), grid(c.cols, c.rows), view{ kMargin, kMargin, c.cellSize } {}
 };
 
 static const char* modeLabel(SearchController::Mode mode) {
@@ -66,13 +68,20 @@ static void handleInput(AppState& app) {
         }
     }
 
+    // Painting mutates the map the running search reads, so any edit invalidates
+    // the current run. Without this the finished path can trace through cells
+    // that became walls mid-search.
     if (hover.inside && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         app.painting = true;
         app.paintValue = grid.at(hover.x, hover.y) == Cell::Wall ? Cell::Floor : Cell::Wall;
         grid.set(hover.x, hover.y, app.paintValue);
+        app.controller.reset();
     }
     if (app.painting && IsMouseButtonDown(MOUSE_BUTTON_LEFT) && hover.inside) {
-        grid.set(hover.x, hover.y, app.paintValue);
+        if (grid.at(hover.x, hover.y) != app.paintValue) {
+            grid.set(hover.x, hover.y, app.paintValue);
+            app.controller.reset();
+        }
     }
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         app.painting = false;
@@ -90,14 +99,18 @@ static void handleInput(AppState& app) {
     if (IsKeyPressed(KEY_SPACE))  app.controller.togglePlay();
     if (IsKeyPressed(KEY_S) || IsKeyPressed(KEY_PERIOD)) app.controller.stepOnce();
     if (IsKeyPressed(KEY_ENTER))  app.controller.runToEnd();
-    if (IsKeyPressed(KEY_R))      app.controller.reset();
-    if (IsKeyPressed(KEY_C))      app.controller.reset();
+    if (IsKeyPressed(KEY_R) || IsKeyPressed(KEY_C)) app.controller.reset();
+    // X wipes the walls too, not just the search overlay.
+    if (IsKeyPressed(KEY_X)) {
+        grid.clear();
+        app.controller.reset();
+    }
     if (IsKeyPressed(KEY_UP))     app.controller.scaleSpeed(1.5);
     if (IsKeyPressed(KEY_DOWN))   app.controller.scaleSpeed(1.0 / 1.5);
 }
 
 static void drawPanel(const AppState& app) {
-    const int x = app.view.originX + app.grid.width() * app.view.cellSize + 20;
+    const int x = app.view.originX + app.grid.width() * app.view.cellSize + kMargin;
     const Pathfinder* algo = app.controller.current();
     char buf[128];
     int y = 20;
@@ -162,20 +175,26 @@ static void frame(void* arg) {
 
     drawPanel(app);
 
-    const int helpY = kScreenHeight - 44;
+    const int helpY = screenHeight(app.cfg) - 44;
     drawUiText("L-drag walls   R-click start   Shift+R-click goal   1-6 algorithm",
-               20, helpY, 13, kMuted);
-    drawUiText("Space play/pause   S step   Enter finish   R reset   C clear   Up/Down speed",
-               20, helpY + 20, 13, kMuted);
+               kMargin, helpY, 13, kMuted);
+    drawUiText("Space play/pause   S step   Enter finish   R/C clear search   X clear walls   Up/Down speed",
+               kMargin, helpY + 20, 13, kMuted);
     EndDrawing();
 }
 
-int main() {
-    InitWindow(kScreenWidth, kScreenHeight, "Pathfind");
+int main(int argc, char** argv) {
+    Config cfg;
+    if (!parseArgs(argc, argv, cfg)) {
+        std::fprintf(stderr, "usage: pathfind [--cols N] [--rows N] [--cell-size N]\n");
+        return 1;
+    }
+
+    InitWindow(screenWidth(cfg), screenHeight(cfg), "Pathfind");
     initRenderer();
 
     // Static so it outlives main()'s frame on web, where set_main_loop unwinds the stack.
-    static AppState app;
+    static AppState app{ cfg };
     app.controller.select(makeAlgorithm(app.algoIdx));
 
 #if defined(PLATFORM_WEB)

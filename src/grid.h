@@ -1,3 +1,5 @@
+// The wall-or-floor occupancy grid every search and the renderer read.
+
 #pragma once
 
 #include <cstdint>
@@ -17,6 +19,7 @@ public:
 
     Cell at(int x, int y) const;
     void set(int x, int y, Cell c);
+    void clear();   // every cell back to Floor
 
     bool inBounds(int x, int y) const;
 

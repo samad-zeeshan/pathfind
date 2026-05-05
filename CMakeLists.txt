@@ -33,6 +33,7 @@ set(PATHFIND_CORE_SOURCES
 
 add_executable(pathfind
     src/main.cpp
+    src/config.cpp
     src/renderer.cpp
     src/controller.cpp
     ${PATHFIND_CORE_SOURCES}

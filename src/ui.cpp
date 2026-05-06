@@ -1,5 +1,5 @@
-// UI component implementations. One font atlas, loaded from the embedded
-// JetBrains Mono so every platform renders identical text.
+// UI component implementations. Glyphs come from the embedded JetBrains Mono,
+// rasterized once per pixel size so native, web, and the exe render identically.
 
 #include "ui.h"
 
@@ -8,12 +8,20 @@
 
 namespace {
 
-Font g_font = {};
-bool g_fontLoaded = false;
+// One glyph atlas per pixel size we actually draw at. Rasterizing each glyph at
+// the exact size it renders keeps text crisp: every glyph draws 1:1 with no
+// minification, which is the softness the old single 44 px atlas picked up when
+// it scaled down to 12-15 px label text. The type scale only touches a handful
+// of sizes, so the cache stays tiny.
+struct SizedFont {
+    int  size;
+    Font font;
+    bool owned;   // false when the embedded load failed and we fell back
+};
 
-// Loaded at 2x the largest render size, then scaled down with bilinear
-// filtering. One atlas covers the whole type scale well enough at these sizes.
-constexpr int kAtlasSize = 44;
+constexpr int kMaxFonts = 8;
+SizedFont g_fonts[kMaxFonts];
+int       g_fontCount = 0;
 
 // Mono glyphs are on a fixed advance, spacing 0 keeps columns aligned.
 constexpr float kSpacing = 0.0f;
@@ -25,39 +33,49 @@ float roundness(Rectangle rec, int radiusPx) {
     return r > 1.0f ? 1.0f : r;
 }
 
+const Font& fontForSize(int size) {
+    for (int i = 0; i < g_fontCount; ++i)
+        if (g_fonts[i].size == size) return g_fonts[i].font;
+    if (g_fontCount >= kMaxFonts) return g_fonts[0].font;  // fixed scale never fills this
+
+    Font f = LoadFontFromMemory(".ttf", kUiFontData, (int)kUiFontDataSize,
+                                size, nullptr, 0);
+    const bool owned = f.texture.id != 0;
+    if (owned) {
+        // Every glyph is drawn 1:1, so bilinear only smooths its own coverage and
+        // never blends mip levels. No mipmaps: nothing here is ever minified.
+        SetTextureFilter(f.texture, TEXTURE_FILTER_BILINEAR);
+    } else {
+        f = GetFontDefault();
+    }
+    g_fonts[g_fontCount] = { size, f, owned };
+    return g_fonts[g_fontCount++].font;
+}
+
 }  // namespace
 
 void initUi() {
-    g_font = LoadFontFromMemory(".ttf", kUiFontData, (int)kUiFontDataSize,
-                                kAtlasSize, nullptr, 0);
-    g_fontLoaded = g_font.texture.id != 0;
-    if (g_fontLoaded) {
-#if defined(PLATFORM_WEB)
-        // WebGL1 cannot mipmap the NPOT atlas, bilinear is the best available.
-        SetTextureFilter(g_font.texture, TEXTURE_FILTER_BILINEAR);
-#else
-        // Mipmaps keep the small sizes crisp, the atlas is 3-4x larger than
-        // the label text it gets scaled down to.
-        GenTextureMipmaps(&g_font.texture);
-        SetTextureFilter(g_font.texture, TEXTURE_FILTER_TRILINEAR);
-#endif
-    } else {
-        g_font = GetFontDefault();
-    }
+    // Warm the sizes the type scale uses so the first frame takes no load hitch.
+    // Any other size is rasterized on demand the first time it is drawn.
+    fontForSize(theme::kFontTitle);
+    fontForSize(theme::kFontBody);
+    fontForSize(theme::kFontSmall);
+    fontForSize(theme::kFontLabel);
 }
 
 void shutdownUi() {
-    if (g_fontLoaded) UnloadFont(g_font);
-    g_font = {};
-    g_fontLoaded = false;
+    for (int i = 0; i < g_fontCount; ++i)
+        if (g_fonts[i].owned) UnloadFont(g_fonts[i].font);
+    g_fontCount = 0;
 }
 
 void uiText(const char* text, int x, int y, int size, Color color) {
-    DrawTextEx(g_font, text, Vector2{ (float)x, (float)y }, (float)size, kSpacing, color);
+    DrawTextEx(fontForSize(size), text, Vector2{ (float)x, (float)y },
+               (float)size, kSpacing, color);
 }
 
 int uiTextWidth(const char* text, int size) {
-    return (int)MeasureTextEx(g_font, text, (float)size, kSpacing).x;
+    return (int)MeasureTextEx(fontForSize(size), text, (float)size, kSpacing).x;
 }
 
 void uiTextRight(const char* text, int rightX, int y, int size, Color color) {
@@ -65,7 +83,7 @@ void uiTextRight(const char* text, int rightX, int y, int size, Color color) {
 }
 
 void uiSectionLabel(const char* text, int x, int y) {
-    DrawTextEx(g_font, text, Vector2{ (float)x, (float)y },
+    DrawTextEx(fontForSize(theme::kFontLabel), text, Vector2{ (float)x, (float)y },
                (float)theme::kFontLabel, 2.0f, theme::kTextMuted);
 }
 

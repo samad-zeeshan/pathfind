@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pathfind — algorithm visualizer</title>
+  <title>Pathfinder — algorithm visualizer</title>
   <style>
     :root {
       --bg: #0f1116;
@@ -26,7 +26,7 @@
     }
     header { font-size: 16px; letter-spacing: 0.5px; }
     header .name { color: var(--text); }
-    header .find { color: var(--accent); }
+    header .finder { color: var(--accent); }
     header .tag  { color: var(--muted); font-size: 12px; margin-left: 10px; }
     canvas {
       display: block;
@@ -44,12 +44,12 @@
   </style>
 </head>
 <body>
-  <header><span class="name">path</span><span class="find">find</span>
+  <header><span class="name">path</span><span class="finder">finder</span>
     <span class="tag">six search algorithms, one interface</span></header>
   <div id="status">Loading…</div>
   <!-- Right-click places endpoints, so the context menu must stay suppressed. -->
   <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
-  <footer><a href="https://github.com/samad-zeeshan/pathfind">source on GitHub</a></footer>
+  <footer><a href="https://github.com/samad-zeeshan/pathfinder">source on GitHub</a></footer>
   <script>
     var Module = {
       canvas: document.getElementById('canvas'),

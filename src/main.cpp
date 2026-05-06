@@ -139,7 +139,7 @@ static void drawPanel(const AppState& app) {
     // Wordmark.
     int y = 28;
     uiText("path", x, y, theme::kFontTitle, theme::kText);
-    uiText("find", x + uiTextWidth("path", theme::kFontTitle), y,
+    uiText("finder", x + uiTextWidth("path", theme::kFontTitle), y,
            theme::kFontTitle, theme::kAccent);
 
     y += 34;
@@ -254,11 +254,11 @@ static void frame(void* arg) {
 int main(int argc, char** argv) {
     Config cfg;
     if (!parseArgs(argc, argv, cfg)) {
-        std::fprintf(stderr, "usage: pathfind [--cols N] [--rows N] [--cell-size N]\n");
+        std::fprintf(stderr, "usage: pathfinder [--cols N] [--rows N] [--cell-size N]\n");
         return 1;
     }
 
-    InitWindow(screenWidth(cfg), screenHeight(cfg), "Pathfind");
+    InitWindow(screenWidth(cfg), screenHeight(cfg), "Pathfinder");
     initUi();
 
     // Static so it outlives main()'s frame on web, where set_main_loop unwinds the stack.

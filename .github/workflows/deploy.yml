@@ -37,8 +37,8 @@ jobs:
       - name: Assemble site
         run: |
           mkdir site
-          cp build-web/pathfind.html site/index.html
-          cp build-web/pathfind.js build-web/pathfind.wasm site/
+          cp build-web/pathfinder.html site/index.html
+          cp build-web/pathfinder.js build-web/pathfinder.wasm site/
 
       - uses: actions/upload-pages-artifact@v3
         with:

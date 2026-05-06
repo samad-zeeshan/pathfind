@@ -1,7 +1,7 @@
-# Pathfind
+# Pathfinder
 
-[![ci](https://github.com/samad-zeeshan/pathfind/actions/workflows/ci.yml/badge.svg)](https://github.com/samad-zeeshan/pathfind/actions/workflows/ci.yml)
-[![deploy](https://github.com/samad-zeeshan/pathfind/actions/workflows/deploy.yml/badge.svg)](https://github.com/samad-zeeshan/pathfind/actions/workflows/deploy.yml)
+[![ci](https://github.com/samad-zeeshan/pathfinder/actions/workflows/ci.yml/badge.svg)](https://github.com/samad-zeeshan/pathfinder/actions/workflows/ci.yml)
+[![deploy](https://github.com/samad-zeeshan/pathfinder/actions/workflows/deploy.yml/badge.svg)](https://github.com/samad-zeeshan/pathfinder/actions/workflows/deploy.yml)
 
 An interactive pathfinding visualizer written in C++17 and raylib. It compiles to
 WebAssembly, so it runs in the browser with nothing to install.
@@ -64,7 +64,7 @@ the corner of a wall.
 
 ## Benchmark
 
-`pathfind_bench` runs every registered algorithm over nine committed map fixtures (open,
+`pathfinder_bench` runs every registered algorithm over nine committed map fixtures (open,
 maze, and rooms, each in small, medium, and large) and prints the table below. The numbers
 are from an MSVC Release build, taking the median of 7 runs. This is the large rooms map:
 
@@ -150,8 +150,8 @@ heuristic on a 2D grid, the two half-searches overlap more than they save.
 Regenerate with:
 
 ```sh
-cmake --build build --target pathfind_bench
-./build/pathfind_bench maps
+cmake --build build --target pathfinder_bench
+./build/pathfinder_bench maps
 ```
 
 ## Verification
@@ -173,8 +173,8 @@ results on repeat runs. A new algorithm gets all of these tests for free once it
 registered.
 
 ```sh
-cmake --build build --target pathfind_tests
-./build/pathfind_tests
+cmake --build build --target pathfinder_tests
+./build/pathfinder_tests
 ```
 
 ## Controls
@@ -206,7 +206,7 @@ cmake --build build --config Release
 ```
 
 The grid defaults to 40 by 30 cells at 18 px each. The native binary takes `--cols`,
-`--rows`, and `--cell-size` to change that (`./build/pathfind --cols 60 --rows 40 --cell-size 14`).
+`--rows`, and `--cell-size` to change that (`./build/pathfinder --cols 60 --rows 40 --cell-size 14`).
 
 Web (needs an activated [emsdk](https://emscripten.org/docs/getting_started/downloads.html)):
 
@@ -215,7 +215,7 @@ emcmake cmake -S . -B build-web -DPLATFORM=Web -DCMAKE_BUILD_TYPE=Release
 cmake --build build-web
 ```
 
-The web build produces `build-web/pathfind.html` along with its `.js` and `.wasm` files.
+The web build produces `build-web/pathfinder.html` along with its `.js` and `.wasm` files.
 The deploy workflow publishes them to GitHub Pages on every push to `master`.
 
 ## Future work

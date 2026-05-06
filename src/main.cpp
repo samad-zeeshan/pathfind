@@ -4,6 +4,8 @@
 #include "grid.h"
 #include "config.h"
 #include "renderer.h"
+#include "ui.h"
+#include "theme.h"
 #include "pathfinder.h"
 #include "algorithms.h"
 #include "controller.h"
@@ -20,11 +22,6 @@ struct Endpoint {
     int y = 0;
     bool set = false;
 };
-
-constexpr MarkerColor kWhite = { 235, 235, 240, 255 };
-constexpr MarkerColor kGold  = { 255, 215, 0, 255 };
-constexpr MarkerColor kRed   = { 230, 80, 80, 255 };
-constexpr MarkerColor kMuted = { 160, 160, 170, 255 };
 
 // Everything the frame callback touches. Emscripten drives frame() from the
 // browser event loop, so this cannot live in main()'s locals.
@@ -43,15 +40,6 @@ struct AppState {
     explicit AppState(const Config& c)
         : cfg(c), grid(c.cols, c.rows), view{ kMargin, kMargin, c.cellSize } {}
 };
-
-static const char* modeLabel(SearchController::Mode mode) {
-    switch (mode) {
-        case SearchController::Mode::Running: return "running";
-        case SearchController::Mode::Paused:  return "paused";
-        case SearchController::Mode::Done:    return "done";
-        default:                              return "idle";
-    }
-}
 
 static void handleInput(AppState& app) {
     Grid& grid = app.grid;
@@ -109,45 +97,129 @@ static void handleInput(AppState& app) {
     if (IsKeyPressed(KEY_DOWN))   app.controller.scaleSpeed(1.0 / 1.5);
 }
 
-static void drawPanel(const AppState& app) {
-    const int x = app.view.originX + app.grid.width() * app.view.cellSize + kMargin;
+// The status badge and the one-line hint under it double as the app's empty
+// states: they always tell the user the next action that makes sense.
+static void statusFor(const AppState& app, const char** text, Color* color, const char** hint) {
     const Pathfinder* algo = app.controller.current();
-    char buf[128];
-    int y = 20;
-
-    drawUiText(algo ? algo->name() : "-", x, y, 20, kWhite);
-    y += 30;
-
-    MarkerColor modeColor = kWhite;
-    if (app.controller.mode() == SearchController::Mode::Done && algo) {
-        modeColor = algo->status() == SearchStatus::Found ? kGold : kRed;
-        std::snprintf(buf, sizeof(buf), "done, %s",
-                      algo->status() == SearchStatus::Found ? "path found" : "no path");
-    } else {
-        std::snprintf(buf, sizeof(buf), "%s", modeLabel(app.controller.mode()));
+    if (!app.start.set || !app.goal.set) {
+        *text = "waiting";  *color = theme::kTextMuted;
+        *hint = !app.start.set ? "right-click places the start"
+                               : "shift+right-click places the goal";
+        return;
     }
-    drawUiText(buf, x, y, 16, modeColor);
-    y += 24;
+    switch (app.controller.mode()) {
+        case SearchController::Mode::Running:
+            *text = "running";  *color = theme::kAccent;  *hint = "space pauses";
+            return;
+        case SearchController::Mode::Paused:
+            *text = "paused";   *color = theme::kWarn;    *hint = "space resumes, s steps";
+            return;
+        case SearchController::Mode::Done:
+            if (algo && algo->status() == SearchStatus::Found) {
+                *text = "path found";  *color = theme::kGold;   *hint = "r clears the run";
+            } else {
+                *text = "no path";     *color = theme::kDanger; *hint = "no route between them";
+            }
+            return;
+        default:
+            *text = "ready";    *color = theme::kTextMuted; *hint = "space runs the search";
+            return;
+    }
+}
 
-    std::snprintf(buf, sizeof(buf), "%.0f steps/s", app.controller.stepsPerSecond());
-    drawUiText(buf, x, y, 14, kMuted);
+static void drawPanel(const AppState& app) {
+    const int panelX = app.view.originX + app.grid.width() * app.view.cellSize + kMargin;
+    const int panelW = kPanelWidth - kMargin;
+    const int x = panelX + theme::kPanelPad;
+    const int cw = panelW - 2 * theme::kPanelPad;
+    char buf[64];
+
+    uiCard(Rectangle{ (float)panelX, 12, (float)panelW, 564 }, theme::kPanel);
+
+    // Wordmark.
+    int y = 28;
+    uiText("path", x, y, theme::kFontTitle, theme::kText);
+    uiText("find", x + uiTextWidth("path", theme::kFontTitle), y,
+           theme::kFontTitle, theme::kAccent);
+
     y += 34;
+    uiSectionLabel("ALGORITHM", x, y);
+    y += 20;
+    for (int i = 0; i < algorithmCount(); ++i) {
+        std::snprintf(buf, sizeof(buf), "%d", i + 1);
+        uiListRow(buf, algorithmName(i), panelX + 8, y, panelW - 16, i == app.algoIdx);
+        y += 26;
+    }
 
+    y += 16;
+    uiSectionLabel("STATUS", x, y);
+    y += 20;
+    const char* statusText = "";
+    const char* hint = "";
+    Color statusColor = theme::kTextMuted;
+    statusFor(app, &statusText, &statusColor, &hint);
+    uiBadge(statusText, x, y, statusColor);
+    y += 32;
+    uiText(hint, x, y, theme::kFontSmall, theme::kTextMuted);
+
+    y += 28;
+    uiSectionLabel("SEARCH", x, y);
+    y += 20;
+    const Pathfinder* algo = app.controller.current();
     const SearchStats st = algo ? algo->stats() : SearchStats{};
     const struct { const char* label; int value; } rows[] = {
-        { "expanded", st.nodesExpanded },
-        { "frontier", st.frontierSize },
+        { "expanded",   st.nodesExpanded },
+        { "frontier",   st.frontierSize },
         { "path cells", st.pathLength },
-        { "path cost", st.pathCost },
+        { "path cost",  st.pathCost },
     };
     for (const auto& row : rows) {
-        std::snprintf(buf, sizeof(buf), "%-11s %d", row.label, row.value);
-        drawUiText(buf, x, y, 15, kWhite);
+        std::snprintf(buf, sizeof(buf), "%d", row.value);
+        uiStatRow(row.label, buf, x, y, cw);
         y += 22;
     }
-    y += 18;
+    std::snprintf(buf, sizeof(buf), "%.0f/s", app.controller.stepsPerSecond());
+    uiStatRow("speed", buf, x, y, cw);
 
-    drawLegend(x, y);
+    y += 36;
+    uiSectionLabel("LEGEND", x, y);
+    y += 20;
+    const struct { const char* label; Color color; bool onFloor; } legend[] = {
+        { "wall",     theme::kWall,     false },
+        { "frontier", theme::kFrontier, true  },
+        { "expanded", theme::kExpanded, true  },
+        { "path",     theme::kPathCore, false },
+        { "start",    theme::kStart,    false },
+        { "goal",     theme::kGoal,     false },
+    };
+    for (int i = 0; i < 6; ++i) {
+        const int col = i % 2;
+        const int row = i / 2;
+        uiLegendItem(legend[i].label, legend[i].color, legend[i].onFloor,
+                     x + col * (cw / 2), y + row * 20);
+    }
+}
+
+static void drawHelpBar(const AppState& app) {
+    const int screenW = screenWidth(app.cfg);
+    const int y = screenHeight(app.cfg) - kHelpBand + 8;
+    const struct { const char* key; const char* desc; } hints[] = {
+        { "space", "run" }, { "s", "step" }, { "enter", "finish" },
+        { "r", "clear" }, { "x", "walls" }, { "1-6", "algorithm" },
+        { "up/dn", "speed" },
+    };
+    int hx = kMargin;
+    for (const auto& hint : hints) {
+        const int advance = uiKeyHint(hint.key, hint.desc, hx, y);
+        hx += advance;
+        // Drop hints that would run off small windows rather than clipping them.
+        if (hx > screenW - kMargin - 90) break;
+    }
+    // Same policy for the mouse line, drop it whole rather than clip mid-phrase.
+    const char* mouseLine = "drag paints walls   right-click start   shift+right-click goal";
+    if (uiTextWidth(mouseLine, theme::kFontSmall) <= screenW - 2 * kMargin) {
+        uiText(mouseLine, kMargin, y + 28, theme::kFontSmall, theme::kTextMuted);
+    }
 }
 
 static void frame(void* arg) {
@@ -161,7 +233,8 @@ static void frame(void* arg) {
     const bool showSearch = algo && app.controller.mode() != SearchController::Mode::Idle;
 
     BeginDrawing();
-    ClearBackground(BLACK);
+    ClearBackground(theme::kWindowBg);
+    drawGridFrame(app.grid, app.view);
     drawGrid(app.grid, app.view);
     if (showSearch) {
         drawSearchState(app.grid, *algo, app.view);
@@ -174,12 +247,7 @@ static void frame(void* arg) {
     if (hover.inside)  drawCellHighlight(app.view, hover.x, hover.y);
 
     drawPanel(app);
-
-    const int helpY = screenHeight(app.cfg) - 44;
-    drawUiText("L-drag walls   R-click start   Shift+R-click goal   1-6 algorithm",
-               kMargin, helpY, 13, kMuted);
-    drawUiText("Space play/pause   S step   Enter finish   R/C clear search   X clear walls   Up/Down speed",
-               kMargin, helpY + 20, 13, kMuted);
+    drawHelpBar(app);
     EndDrawing();
 }
 
@@ -191,7 +259,7 @@ int main(int argc, char** argv) {
     }
 
     InitWindow(screenWidth(cfg), screenHeight(cfg), "Pathfind");
-    initRenderer();
+    initUi();
 
     // Static so it outlives main()'s frame on web, where set_main_loop unwinds the stack.
     static AppState app{ cfg };
@@ -207,7 +275,7 @@ int main(int argc, char** argv) {
     }
 #endif
 
-    shutdownRenderer();
+    shutdownUi();
     CloseWindow();
     return 0;
 }

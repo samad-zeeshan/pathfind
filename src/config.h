@@ -1,4 +1,4 @@
-// Grid and window sizing. Defaults reproduce the original 40x30 board; the
+// Grid and window sizing. Defaults reproduce the original 40x30 board. The
 // native build can override them from the command line.
 
 #pragma once
@@ -14,7 +14,9 @@ struct Config {
 // Layout is grid on the left, a fixed-width stats panel on the right. The grid
 // origin is the same margin on both axes.
 constexpr int kMargin = 20;
-constexpr int kPanelWidth = 250;
+constexpr int kPanelWidth = 260;
+constexpr int kHelpBand = 64;         // reserved strip under the grid for key hints
+constexpr int kPanelMinBottom = 580;  // panel content height floor, see drawPanel
 
 inline int screenWidth(const Config& c) {
     return kMargin + c.cols * c.cellSize + kMargin + kPanelWidth;
@@ -22,9 +24,9 @@ inline int screenWidth(const Config& c) {
 
 inline int screenHeight(const Config& c) {
     const int gridBottom = kMargin + c.rows * c.cellSize;
-    // Room under the grid for the two help lines, with a floor so the panel and
-    // legend still fit when the grid is tiny.
-    return std::max(gridBottom + 60, 420);
+    // The help band hangs below whichever column is taller, so tiny grids still
+    // fit the full panel and huge grids keep their hints.
+    return std::max(gridBottom, kPanelMinBottom) + kHelpBand;
 }
 
 // Parse --cols, --rows, --cell-size into cfg. Returns false on a missing or
